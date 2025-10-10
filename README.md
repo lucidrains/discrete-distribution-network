@@ -4,6 +4,8 @@
 
 Exploration into [Discrete Distribution Network](https://discrete-distribution-networks.github.io/), by Lei Yang out of Beijing
 
+Besides the split-and-prune, may also throw in an option for crossover (mixing of top 2 nodes to replace the pruned)
+
 ## Citations
 
 ```bibtex
