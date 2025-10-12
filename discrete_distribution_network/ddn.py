@@ -62,8 +62,8 @@ class GuidedSampler(Module):
         if total_count < self.min_total_count_before_split_prune:
             return
 
-        count_max, count_max_index = counts.amax(), counts.argmax(dim = -1)
-        count_min, count_min_index = counts.amin(), counts.argmin(dim = -1)
+        count_max, count_max_index = counts.max(dim = -1)
+        count_min, count_min_index = counts.min(dim = -1)
 
         if (
             ((count_max / total_count) <= self.split_thres) &
