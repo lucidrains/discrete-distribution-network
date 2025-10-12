@@ -22,6 +22,15 @@ def default(v, d):
 def sample_prob(prob):
     return random() < prob
 
+# tensor helpers
+
+def log(t, eps = 1e-20):
+    return t.clamp(min = eps).log()
+
+def gumbel_noise(t):
+    noise = torch.rand_like(t)
+    return -log(-log(noise))
+
 # classes
 
 def split_and_prune(network: Module):
@@ -43,7 +52,9 @@ class GuidedSampler(Module):
         prune_thres = 0.5,
         min_total_count_before_split_prune = 100,
         crossover_top2_prob = 0.,
-        straight_through_distance_logits = False
+        straight_through_distance_logits = False,
+        stochastic = False,
+        gumbel_noise_scale = 1.
     ):
         super().__init__()
 
@@ -66,6 +77,8 @@ class GuidedSampler(Module):
 
         self.crossover_top2_prob = crossover_top2_prob
 
+        self.stochastic = stochastic
+        self.gumbel_noise_scale = gumbel_noise_scale
         self.straight_through_distance_logits = straight_through_distance_logits
 
     @torch.no_grad()
@@ -150,9 +163,16 @@ class GuidedSampler(Module):
 
         distance = rearrange(distance, 'b 1 k -> b k')
 
+        logits = -distance
+
+        # allow for a bit of stochasticity
+
+        if self.stochastic:
+            logits = logits + gumbel_noise(logits) * self.gumbel_noise_scale
+
         # select the code parameters that produced the image that is closest to the query
 
-        codes = distance.argmin(dim = -1)
+        codes = logits.argmax(dim = -1)
 
         if self.training:
             self.counts.scatter_add_(0, codes, torch.ones_like(codes))
@@ -169,8 +189,6 @@ class GuidedSampler(Module):
             sel_key_values = rearrange(sel_key_values, 'b 1 ... -> b ...')
         else:
             # variant treating the distance as attention logits
-
-            logits = -distance
 
             attn = logits.softmax(dim = -1)
             one_hot = F.one_hot(codes, num_classes = self.codebook_size)
