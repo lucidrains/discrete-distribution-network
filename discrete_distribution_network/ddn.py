@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Callable
+from random import random
 
 import torch
 from torch import nn, arange, tensor
@@ -18,6 +19,9 @@ def exists(v):
 def default(v, d):
     return v if exists(v) else d
 
+def sample_prob(prob):
+    return random() < prob
+
 # classes
 
 class GuidedSampler(Module):
@@ -30,7 +34,8 @@ class GuidedSampler(Module):
         distance_fn: Callable | None = None,
         split_thres = 2.,
         prune_thres = 0.5,
-        min_total_count_before_split_prune = 100
+        min_total_count_before_split_prune = 100,
+        crossover_top2_prob = 0.
     ):
         super().__init__()
 
@@ -48,6 +53,8 @@ class GuidedSampler(Module):
         self.prune_thres = prune_thres / codebook_size
         self.min_total_count_before_split_prune = min_total_count_before_split_prune
 
+        self.crossover_top2_prob = crossover_top2_prob
+
     @torch.no_grad()
     def split_and_prune_(
         self
@@ -60,7 +67,9 @@ class GuidedSampler(Module):
         if total_count < self.min_total_count_before_split_prune:
             return
 
-        count_max, count_max_index = counts.max(dim = -1)
+        top2_values, top2_indices = counts.topk(2, dim = -1)
+
+        count_max, count_max_index = top2_values[0], top2_indices[0]
         count_min, count_min_index = counts.min(dim = -1)
 
         if (
@@ -77,10 +86,21 @@ class GuidedSampler(Module):
         self.counts[count_max_index] = half_count_max
         self.counts[count_min_index] = half_count_max + 1 # adds 1 to k_new for some reason
 
+        # whether to crossover top 2
+
+        should_crossover = sample_prob(self.crossover_top2_prob)
+
         # update the params
 
         for codebook_param in codebook_params:
+
             split = codebook_param[count_max]
+
+            # whether to crossover
+            if should_crossover:
+                second_index = top2_indices[1]
+                second_split = codebook_param[second_index]
+                split = (split + second_split) / 2. # naive average for now
 
             # prune by replacement
             codebook_param[count_min].copy_(split)
