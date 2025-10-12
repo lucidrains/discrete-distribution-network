@@ -23,8 +23,9 @@ classifiers=[
 ]
 
 dependencies = [
+    "einops>=0.8.1",
     "torch>=2.4",
-    "einops>=0.8.1"
+    "x-mlps-pytorch"
 ]
 
 [project.urls]

@@ -40,9 +40,9 @@ flowers_dataset = OxfordFlowersDataset(
 
 # models and trainer
 
-from discrete_distribution_network import DDN, Unet, Trainer
+from discrete_distribution_network import DDN, Network, Trainer
 
-model = Unet(
+model = Network(
     dim = 64
 )
 
