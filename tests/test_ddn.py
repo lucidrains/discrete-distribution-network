@@ -18,3 +18,5 @@ def test_ddn():
     assert out.shape == query_image.shape
     assert codes.shape == (2,)
     assert commit_loss.numel() == 1
+
+    sampler.split_and_prune_()
