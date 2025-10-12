@@ -39,6 +39,8 @@ class GuidedSampler(Module):
         self.to_key_values = Ensemble(network, ensemble_size = codebook_size)
         self.distance_fn = default(distance_fn, torch.cdist)
 
+        self.register_buffer('counts', torch.zeros(codebook_size).long())
+
     def split_and_prune_(
         self
     ):
@@ -65,6 +67,9 @@ class GuidedSampler(Module):
         # select the code parameters that produced the image that is closest to the query
 
         codes = distance.argmin(dim = -1)
+
+        if self.training:
+            self.counts.scatter_add_(0, codes, torch.ones_like(codes))
 
         # some tensor gymnastics to select out the image across batch
 
