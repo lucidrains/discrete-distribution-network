@@ -24,6 +24,13 @@ def sample_prob(prob):
 
 # classes
 
+def split_and_prune(network: Module):
+    # given some parent network, calls split and prune for all guided samplers
+
+    for m in network.modules():
+        if isinstance(m, GuidedSampler):
+            m.split_and_prune_()
+
 class GuidedSampler(Module):
     def __init__(
         self,
