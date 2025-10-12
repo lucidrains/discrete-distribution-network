@@ -1,5 +1,7 @@
 import pytest
+
 import torch
+from torch import tensor
 
 def test_ddn():
     from discrete_distribution_network.ddn import GuidedSampler
@@ -20,3 +22,8 @@ def test_ddn():
     assert commit_loss.numel() == 1
 
     sampler.split_and_prune_()
+
+    # after much training
+
+    assert sampler.forward_for_codes(features, tensor([3, 5])).shape == (2, 3, 32, 32)
+    assert sampler.forward_for_codes(features, tensor(7)).shape == (2, 3, 32, 32)

@@ -48,8 +48,6 @@ class GuidedSampler(Module):
         self.prune_thres = prune_thres / codebook_size
         self.min_total_count_before_split_prune = min_total_count_before_split_prune
 
-        self.register_buffer('zero', tensor(0.), persistent = False)
-
     @torch.no_grad()
     def split_and_prune_(
         self
@@ -91,10 +89,20 @@ class GuidedSampler(Module):
             if exists(codebook_param.grad):
                 codebook_param.grad[count_min].zero_()
 
+    def forward_for_codes(
+        self,
+        features,      # (b d h w)
+        codes          # (b) | ()
+    ):
+        if codes.numel() == 1:
+            return self.to_key_values.forward_one(features, id = codes.item())
+
+        return self.to_key_values(features, ids = codes, each_batch_sample = True)
+
     def forward(
         self,
-        features, # (b d h w)
-        query     # (b c h w)
+        features,       # (b d h w)
+        query,          # (b c h w)
     ):
         batch, device = query.shape[0], query.device
 
@@ -128,10 +136,7 @@ class GuidedSampler(Module):
 
         # commit loss
 
-        commit_loss = self.zero
-
-        if self.training:
-            commit_loss = F.mse_loss(sel_key_values, query)
+        commit_loss = F.mse_loss(sel_key_values, query)
 
         return sel_key_values, codes, commit_loss
 
