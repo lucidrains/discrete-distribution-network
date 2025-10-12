@@ -5,8 +5,10 @@ import torch
 from torch import tensor, nn
 
 @param('use_mlp', (False, True))
+@param('straight_through', (False, True))
 def test_ddn(
-    use_mlp
+    use_mlp,
+    straight_through
 ):
     from discrete_distribution_network.ddn import GuidedSampler
 
@@ -24,7 +26,8 @@ def test_ddn(
         codebook_size = 10,
         network = network,
         min_total_count_before_split_prune = 1,
-        crossover_top2_prob = 1.
+        crossover_top2_prob = 1.,
+        straight_through_distance_logits = straight_through
     )
 
     features = torch.randn(10, 16, 32, 32)

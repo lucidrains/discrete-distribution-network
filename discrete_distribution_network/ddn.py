@@ -35,13 +35,15 @@ class GuidedSampler(Module):
         split_thres = 2.,
         prune_thres = 0.5,
         min_total_count_before_split_prune = 100,
-        crossover_top2_prob = 0.
+        crossover_top2_prob = 0.,
+        straight_through_distance_logits = False
     ):
         super().__init__()
 
         if not exists(network):
             network = nn.Conv2d(dim, dim_query, 1, bias = False)
 
+        self.codebook_size = codebook_size
         self.to_key_values = Ensemble(network, ensemble_size = codebook_size)
         self.distance_fn = default(distance_fn, torch.cdist)
 
@@ -53,7 +55,11 @@ class GuidedSampler(Module):
         self.prune_thres = prune_thres / codebook_size
         self.min_total_count_before_split_prune = min_total_count_before_split_prune
 
+        # improvisations
+
         self.crossover_top2_prob = crossover_top2_prob
+
+        self.straight_through_distance_logits = straight_through_distance_logits
 
     @torch.no_grad()
     def split_and_prune_(
@@ -146,13 +152,24 @@ class GuidedSampler(Module):
 
         # some tensor gymnastics to select out the image across batch
 
-        key_values = rearrange(key_values, 'k b ... -> b k ...')
+        if not self.straight_through_distance_logits:
+            key_values = rearrange(key_values, 'k b ... -> b k ...')
 
-        codes_for_indexing = rearrange(codes, 'b -> b 1')
-        batch_for_indexing = arange(batch, device = device)[:, None]
+            codes_for_indexing = rearrange(codes, 'b -> b 1')
+            batch_for_indexing = arange(batch, device = device)[:, None]
 
-        sel_key_values = key_values[batch_for_indexing, codes_for_indexing]
-        sel_key_values = rearrange(sel_key_values, 'b 1 ... -> b ...')
+            sel_key_values = key_values[batch_for_indexing, codes_for_indexing]
+            sel_key_values = rearrange(sel_key_values, 'b 1 ... -> b ...')
+        else:
+            # variant treating the distance as attention logits
+
+            logits = -distance
+
+            attn = logits.softmax(dim = -1)
+            one_hot = F.one_hot(codes, num_classes = self.codebook_size)
+
+            st_one_hot = one_hot + attn - attn.detach()
+            sel_key_values = einsum(key_values, st_one_hot, 'k b ..., b k -> b ...')
 
         # commit loss
 
