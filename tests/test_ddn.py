@@ -1,15 +1,28 @@
 import pytest
+param = pytest.mark.parametrize
 
 import torch
-from torch import tensor
+from torch import tensor, nn
 
-def test_ddn():
+@param('use_mlp', (False, True))
+def test_ddn(
+    use_mlp
+):
     from discrete_distribution_network.ddn import GuidedSampler
+
+    network = None
+    if use_mlp:
+        network = nn.Sequential(
+            nn.Conv2d(16, 8, 1),
+            nn.ReLU(),
+            nn.Conv2d(8, 3, 1)
+        )
 
     sampler = GuidedSampler(
         dim = 16,
         dim_query = 3,
         codebook_size = 10,
+        network = network,
         min_total_count_before_split_prune = 1,
         crossover_top2_prob = 1.
     )
