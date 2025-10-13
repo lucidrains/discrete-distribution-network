@@ -141,7 +141,7 @@ class GuidedSampler(Module):
 
         for codebook_param in codebook_params:
 
-            split = codebook_param[count_max]
+            split = codebook_param[count_max_index]
 
             # whether to crossover
             if should_crossover:
@@ -150,11 +150,11 @@ class GuidedSampler(Module):
                 split = (split + second_split) / 2. # naive average for now
 
             # prune by replacement
-            codebook_param[count_min].copy_(split)
+            codebook_param[count_min_index].copy_(split)
 
             # take care of grad if present
             if exists(codebook_param.grad):
-                codebook_param.grad[count_min].zero_()
+                codebook_param.grad[count_min_index].zero_()
 
     def forward_for_codes(
         self,
@@ -215,8 +215,8 @@ class GuidedSampler(Module):
         # get the l2 distance
 
         distance = self.distance_fn(
-            rearrange(query, 'b c h w -> b 1 (c h w)'),
-            rearrange(key_values, 'k b c h w -> b k (c h w)')
+            rearrange(query, 'b ... -> b 1 (...)'),
+            rearrange(key_values, 'k b ... -> b k (...)')
         )
 
         distance = rearrange(distance, 'b 1 k -> b k')
