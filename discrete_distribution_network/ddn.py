@@ -3,7 +3,7 @@ from typing import Callable
 from random import random
 
 import torch
-from torch import nn, arange, tensor
+from torch import nn, arange, tensor, Tensor
 import torch.nn.functional as F
 from torch.nn import Module
 
@@ -66,7 +66,8 @@ class GuidedSampler(Module):
         straight_through_distance_logits = False,
         stochastic = False,
         gumbel_noise_scale = 1.,
-        patch_size = None               # facilitate the future work where the guided sampler is done on patches
+        patch_size = None,               # facilitate the future work where the guided sampler is done on patches
+        transform: Callable[[Tensor], Tensor] | None = None
     ):
         super().__init__()
 
@@ -101,6 +102,11 @@ class GuidedSampler(Module):
         if self.acts_on_patches:
             self.image_to_patches = Rearrange('b c (h p1) (w p2) -> b h w c p1 p2', p1 = patch_size, p2 = patch_size)
             self.patches_to_image = Rearrange('b h w c p1 p2 -> b c (h p1) (w p2)')
+
+        # transform features and query image into some other space
+        # say vgg features
+
+        self.transform = transform
 
     @torch.no_grad()
     def split_and_prune_(
@@ -163,6 +169,11 @@ class GuidedSampler(Module):
     ):
         batch = features.shape[0]
 
+        # maybe transform
+
+        if exists(self.transform):
+            features = self.transform(features)
+
         # handle patches
 
         if self.acts_on_patches:
@@ -197,9 +208,17 @@ class GuidedSampler(Module):
         query,          # (b c h w)
     ):
 
+        # maybe transform
+
+        if exists(self.transform):
+            features, query = map(self.transform, (features, query))
+
         # take care of maybe patching
 
         if self.acts_on_patches:
+            assert features.ndim == 4 and query.ndim == 4
+
+
             features = self.image_to_patches(features)
             query = self.image_to_patches(query)
 
