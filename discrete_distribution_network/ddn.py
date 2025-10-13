@@ -7,7 +7,8 @@ from torch import nn, arange, tensor
 import torch.nn.functional as F
 from torch.nn import Module
 
-from einops import rearrange, einsum
+from einops import rearrange, repeat, einsum, pack, unpack
+from einops.layers.torch import Rearrange
 
 from x_mlps_pytorch.ensemble import Ensemble
 
@@ -30,6 +31,16 @@ def log(t, eps = 1e-20):
 def gumbel_noise(t):
     noise = torch.rand_like(t)
     return -log(-log(noise))
+
+def pack_one(t, pattern):
+    packed, ps = pack([t], pattern)
+
+    def inverse(out, inv_pattern = None):
+        inv_pattern = default(inv_pattern, pattern)
+        unpacked, = unpack(out, ps, inv_pattern)
+        return unpacked
+
+    return packed, inverse
 
 # classes
 
@@ -54,7 +65,8 @@ class GuidedSampler(Module):
         crossover_top2_prob = 0.,
         straight_through_distance_logits = False,
         stochastic = False,
-        gumbel_noise_scale = 1.
+        gumbel_noise_scale = 1.,
+        patch_size = None               # facilitate the future work where the guided sampler is done on patches
     ):
         super().__init__()
 
@@ -80,6 +92,15 @@ class GuidedSampler(Module):
         self.stochastic = stochastic
         self.gumbel_noise_scale = gumbel_noise_scale
         self.straight_through_distance_logits = straight_through_distance_logits
+
+        # acting on patches instead of whole image, mentioned by author
+
+        self.patch_size = patch_size
+        self.acts_on_patches = exists(patch_size)
+
+        if self.acts_on_patches:
+            self.image_to_patches = Rearrange('b c (h p1) (w p2) -> b h w c p1 p2', p1 = patch_size, p2 = patch_size)
+            self.patches_to_image = Rearrange('b h w c p1 p2 -> b c (h p1) (w p2)')
 
     @torch.no_grad()
     def split_and_prune_(
@@ -140,16 +161,53 @@ class GuidedSampler(Module):
         features,      # (b d h w)
         codes          # (b) | ()
     ):
-        if codes.numel() == 1:
-            return self.to_key_values.forward_one(features, id = codes.item())
+        batch = features.shape[0]
 
-        return self.to_key_values(features, ids = codes, each_batch_sample = True)
+        # handle patches
+
+        if self.acts_on_patches:
+
+            if codes.numel() == 1:
+                codes = repeat(codes, ' -> b', b = features.shape[0])
+
+            features = self.image_to_patches(features)
+            features, inverse_pack = pack_one(features, '* c h w')
+
+            codes = repeat(codes, 'b h w -> (b h w)')
+
+        # if one code, just forward the selected network for all features
+        # else each batch is matched with the corresponding code
+
+        if codes.numel() == 1:
+            sel_key_values = self.to_key_values.forward_one(features, id = codes.item())
+        else:
+            sel_key_values =  self.to_key_values(features, ids = codes, each_batch_sample = True)
+
+        # handle patches
+
+        if self.acts_on_patches:
+            sel_key_values = inverse_pack(sel_key_values)
+            sel_key_values = self.patches_to_image(sel_key_values)
+
+        return sel_key_values
 
     def forward(
         self,
         features,       # (b d h w)
         query,          # (b c h w)
     ):
+
+        # take care of maybe patching
+
+        if self.acts_on_patches:
+            features = self.image_to_patches(features)
+            query = self.image_to_patches(query)
+
+            features, _ = pack_one(features, '* c h w')
+            query, inverse_pack = pack_one(query, '* c h w')
+
+        # variables
+
         batch, device = query.shape[0], query.device
 
         key_values = self.to_key_values(features)
@@ -199,6 +257,16 @@ class GuidedSampler(Module):
         # commit loss
 
         commit_loss = F.mse_loss(sel_key_values, query)
+
+        # maybe reconstitute patch dimensions
+
+        if self.acts_on_patches:
+            sel_key_values = inverse_pack(sel_key_values, '* c p1 p2')
+            sel_key_values = self.patches_to_image(sel_key_values)
+
+            codes = inverse_pack(codes, '*')
+
+        # return the chosen feature, the code indices, and commit loss
 
         return sel_key_values, codes, commit_loss
 
