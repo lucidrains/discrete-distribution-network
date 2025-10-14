@@ -233,7 +233,7 @@ class GuidedSampler(Module):
 
         # allow for a bit of stochasticity
 
-        if self.stochastic:
+        if self.stochastic and self.training:
             logits = logits + gumbel_noise(logits) * self.gumbel_noise_scale
 
         # select the code parameters that produced the image that is closest to the query
@@ -245,7 +245,7 @@ class GuidedSampler(Module):
 
         # some tensor gymnastics to select out the image across batch
 
-        if not self.straight_through_distance_logits:
+        if not self.straight_through_distance_logits or not self.training:
             key_values = rearrange(key_values, 'k b ... -> b k ...')
 
             codes_for_indexing = rearrange(codes, 'b -> b 1')
