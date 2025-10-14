@@ -285,6 +285,51 @@ class GuidedSampler(Module):
 
 # ddn
 
+class ChanRMSNorm(Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.scale = dim ** 0.5
+        self.gamma = nn.Parameter(torch.zeros(1, dim, 1, 1))
+
+    def forward(self, x):
+        return F.normalize(x, dim = 1) * (self.gamma + 1.) * self.scale
+
+class Block(Module):
+    def __init__(
+        self,
+        dim,
+        dim_out,
+        dropout = 0.
+    ):
+        super().__init__()
+        self.proj = nn.Conv2d(dim, dim_out, 3, padding = 1)
+        self.norm = ChanRMSNorm(dim_out)
+        self.act = nn.SiLU()
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = x.contiguous()
+        x = self.proj(x)
+        x = self.norm(x)
+        x = self.act(x)
+        return self.dropout(x)
+
+class ResnetBlock(Module):
+    def __init__(
+        self,
+        dim,
+        dim_out,
+        dropout = 0.
+    ):
+        super().__init__()
+        self.block1 = Block(dim, dim_out, dropout = dropout)
+        self.block2 = Block(dim_out, dim_out)
+
+    def forward(self, x):
+        h = self.block1(x)
+        h = self.block2(h)
+        return h
+
 class DDN(Module):
     def __init__(
         self,
@@ -293,6 +338,7 @@ class DDN(Module):
         image_size = 256,
         channels = 3,
         codebook_size = 10,
+        dropout = 0.1,
         guided_sampled_kwargs: dict = dict(),
     ):
         super().__init__()
@@ -336,6 +382,8 @@ class DDN(Module):
                 nn.Conv2d(dim_in + prev_sampled_dim, dim_out, 3, padding = 1)
             )
 
+            resnet_block = ResnetBlock(dim_out, dim_out, dropout = dropout)
+
             guided_sampler = GuidedSampler(
                 dim = dim_out,
                 dim_query = channels,
@@ -345,6 +393,7 @@ class DDN(Module):
 
             self.layers.append(ModuleList([
                 upsampler,
+                resnet_block,
                 guided_sampler
             ]))
 
@@ -375,12 +424,14 @@ class DDN(Module):
 
         sampled_output = None
 
-        for (upsampler, guided_sampler), layer_codes in zip(self.layers, codes.unbind(dim = 1)):
+        for (upsampler, resnet_block, guided_sampler), layer_codes in zip(self.layers, codes.unbind(dim = 1)):
 
             if exists(sampled_output):
                 features = cat((sampled_output, features), dim = 1)
 
             features = upsampler(features)
+
+            features = resnet_block(features)
 
             sampled_output = guided_sampler.forward_for_codes(features, layer_codes)
 
@@ -403,12 +454,14 @@ class DDN(Module):
         codes = []
         sampled_outputs = []
 
-        for upsampler, guided_sampler in self.layers:
+        for upsampler, resnet_block, guided_sampler in self.layers:
 
             if len(sampled_outputs) > 0:
                 features = cat((sampled_outputs[-1], features), dim = 1)
 
             features = upsampler(features)
+
+            features = resnet_block(features)
 
             # query image for guiding is just input images resized
 
