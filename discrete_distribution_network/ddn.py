@@ -441,7 +441,8 @@ class DDN(Module):
 
     def forward(
         self,
-        images
+        images,
+        return_intermediates = False
     ):
         assert images.shape[1:] == self.input_image_shape
         batch = images.shape[0]
@@ -481,7 +482,13 @@ class DDN(Module):
         # losses summed across layers
 
         total_loss = sum(losses)
-        return total_loss
+
+        if not return_intermediates:
+            return total_loss
+
+        codes = stack(codes, dim = -1)
+
+        return total_loss, (codes, sampled_outputs)
 
 # trainer
 
