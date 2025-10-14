@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Callable
 from random import random
+from collections import namedtuple
 
 import torch
 from torch import nn, arange, tensor
@@ -11,6 +12,10 @@ from einops import rearrange, repeat, einsum, pack, unpack
 from einops.layers.torch import Rearrange
 
 from x_mlps_pytorch.ensemble import Ensemble
+
+# constants
+
+GuidedSamplerOutput = namedtuple('GuidedSamplerOutput', ('output', 'codes', 'commit_loss'))
 
 # helpers
 
@@ -195,6 +200,7 @@ class GuidedSampler(Module):
         self,
         features,       # (b d h w)
         query,          # (b c h w)
+        return_distances = False
     ):
 
         # take care of maybe patching
@@ -268,7 +274,12 @@ class GuidedSampler(Module):
 
         # return the chosen feature, the code indices, and commit loss
 
-        return sel_key_values, codes, commit_loss
+        output = GuidedSamplerOutput(sel_key_values, codes, commit_loss)
+
+        if not return_distances:
+            return output
+
+        return output, distance
 
 class Network(Module):
     def __init__(
