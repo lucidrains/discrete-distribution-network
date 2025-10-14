@@ -407,7 +407,8 @@ class DDN(Module):
     def sample(
         self,
         batch_size = None,
-        codes = None  # (b stages)
+        codes = None,  # (b stages)
+        return_codes = False
     ):
         assert exists(batch_size) ^ exists(codes)
 
@@ -437,7 +438,10 @@ class DDN(Module):
 
         # last sampled output 
 
-        return sampled_output
+        if not return_codes:
+            return sampled_output
+
+        return sampled_output, codes
 
     def forward(
         self,
