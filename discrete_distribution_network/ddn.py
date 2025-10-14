@@ -1,12 +1,14 @@
 from __future__ import annotations
+
+from math import log2
 from typing import Callable
 from random import random
 from collections import namedtuple
 
 import torch
-from torch import nn, arange, tensor
+from torch import nn, arange, tensor, cat
 import torch.nn.functional as F
-from torch.nn import Module
+from torch.nn import Module, ModuleList
 
 from einops import rearrange, repeat, einsum, pack, unpack
 from einops.layers.torch import Rearrange
@@ -49,7 +51,7 @@ def pack_one(t, pattern):
 
 # classes
 
-def split_and_prune(network: Module):
+def split_and_prune_(network: Module):
     # given some parent network, calls split and prune for all guided samplers
 
     for m in network.modules():
@@ -281,18 +283,152 @@ class GuidedSampler(Module):
 
         return output, distance
 
-class Network(Module):
-    def __init__(
-        self,
-        dim
-    ):
-        super().__init__()
+# ddn
 
 class DDN(Module):
     def __init__(
-        self
+        self,
+        dim,
+        dim_max = 1024,
+        image_size = 256,
+        channels = 3,
+        codebook_size = 10,
+        guided_sampled_kwargs: dict = dict(),
     ):
         super().__init__()
+        assert log2(image_size).is_integer()
+
+        self.input_image_shape = (channels, image_size, image_size)
+
+        # number of stages from 2x2 features
+
+        stages = int(log2(image_size))
+
+        self.num_stages = stages
+        self.codebook_size = codebook_size
+
+        # dimensions
+
+        dim_mults = [2 ** stage for stage in range(stages)]
+
+        dims = [min(dim_max, dim * dim_mult) for dim_mult in dim_mults]
+
+        dim_first = dims[0]
+
+        dim_pairs = tuple(zip(dims[:-1], dims[1:]))
+
+        # initial 2x2 features
+
+        self.init_features = nn.Parameter(torch.randn(dim_first, 2, 2) * 1e-2)
+
+        # layers
+
+        self.layers = ModuleList([])
+
+        for ind, (dim_in, dim_out) in enumerate(dim_pairs):
+
+            has_prev_sampler_output = ind != 0
+
+            prev_sampled_dim = channels if has_prev_sampler_output else 0
+
+            upsampler = nn.Sequential(
+                nn.Upsample(scale_factor = 2, mode = 'bilinear'),
+                nn.Conv2d(dim_in + prev_sampled_dim, dim_out, 3, padding = 1)
+            )
+
+            guided_sampler = GuidedSampler(
+                dim = dim_out,
+                dim_query = channels,
+                codebook_size = codebook_size,
+                **guided_sampled_kwargs
+            )
+
+            self.layers.append(ModuleList([
+                upsampler,
+                guided_sampler
+            ]))
+
+    def split_and_prune_(self):
+        split_and_prune_(self)
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+    def sample(
+        self,
+        batch_size = None,
+        codes = None  # (b stages)
+    ):
+        assert exists(batch_size) ^ exists(codes)
+
+        # if only batch size sent in, random codes
+
+        if not exists(codes):
+            codes = torch.randint(0, self.codebook_size, (batch_size, self.num_stages), device = self.device)
+
+        # init features
+
+        features = repeat(self.init_features, '... -> b ...', b = batch_size)
+
+        # sampled output of a stage
+
+        sampled_output = None
+
+        for (upsampler, guided_sampler), layer_codes in zip(self.layers, codes.unbind(dim = 1)):
+
+            if exists(sampled_output):
+                features = cat((sampled_output, features), dim = 1)
+
+            features = upsampler(features)
+
+            sampled_output = guided_sampler.forward_for_codes(features, layer_codes)
+
+        # last sampled output 
+
+        return sampled_output
+
+    def forward(
+        self,
+        images
+    ):
+        assert images.shape[1:] == self.input_image_shape
+        batch = images.shape[0]
+
+        # init features
+
+        features = repeat(self.init_features, '... -> b ...', b = batch)
+
+        losses = []
+        codes = []
+        sampled_outputs = []
+
+        for upsampler, guided_sampler in self.layers:
+
+            if len(sampled_outputs) > 0:
+                features = cat((sampled_outputs[-1], features), dim = 1)
+
+            features = upsampler(features)
+
+            # query image for guiding is just input images resized
+
+            height, width = features.shape[-2:]
+            query_images = F.interpolate(images, (height, width), mode = 'bilinear')
+
+            # guided sampler
+
+            sampled_output, layer_code, layer_loss = guided_sampler(features, query_images)
+
+            # losses, codes, outputs
+
+            sampled_outputs.append(sampled_output)
+            codes.append(layer_code)
+            losses.append(layer_loss)
+
+        # losses summed across layers
+
+        total_loss = sum(losses)
+        return total_loss
 
 # trainer
 

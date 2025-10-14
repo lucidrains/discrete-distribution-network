@@ -98,3 +98,21 @@ def test_non_image():
     # after much training
 
     assert sampler.forward_for_codes(features[:3], codes[:3]).shape == (3, 16)
+
+def test_ddn():
+    from discrete_distribution_network.ddn import DDN
+
+    ddn = DDN(
+        dim = 32,
+        image_size = 64
+    )
+
+    images = torch.randn(2, 3, 64, 64)
+    loss = ddn(images)
+    loss.backward()
+    ddn.split_and_prune_()
+
+    sampled = ddn.sample(batch_size = 1)
+
+    assert sampled.shape == (1, 3, 64, 64)
+
