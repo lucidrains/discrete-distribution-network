@@ -495,5 +495,6 @@ class DDN(Module):
 class Trainer(Module):
     def __init__(
         self,
+        ddn: DDN
     ):
         super().__init__()
