@@ -361,7 +361,7 @@ class DDN(Module):
         image_size = 256,
         channels = 3,
         codebook_size = 10,
-        dropout = 0.1,
+        dropout = 0.,
         guided_sampler_kwargs: dict = dict(),
     ):
         super().__init__()

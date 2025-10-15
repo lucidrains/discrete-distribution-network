@@ -47,6 +47,7 @@ from discrete_distribution_network import DDN, Trainer
 ddn = DDN(
     dim = 32,
     image_size = IMAGE_SIZE,
+    dropout = 0.1,
     guided_sampler_kwargs = dict(
         crossover_top2_prob = 0.25,
         straight_through_distance_logits = True
