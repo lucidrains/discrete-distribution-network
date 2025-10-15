@@ -35,6 +35,20 @@ sampled = ddn.sample(batch_size = 1)
 assert sampled.shape == (1, 3, 256, 256)
 ```
 
+## Oxford flowers
+
+Install `uv`, which will probably become the default in the near future
+
+```shell
+$ pip install uv
+```
+
+Then
+
+```shell
+$ uv run train_oxford_flowers.py
+```
+
 ## Citations
 
 ```bibtex

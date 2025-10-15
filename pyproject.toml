@@ -1,6 +1,6 @@
 [project]
 name = "discrete-distribution-network"
-version = "0.0.11"
+version = "0.1.0"
 description = "Discrete Distribution Network"
 authors = [
     { name = "Phil Wang", email = "lucidrains@gmail.com" }
@@ -23,9 +23,12 @@ classifiers=[
 ]
 
 dependencies = [
+    "accelerate",
     "einops>=0.8.1",
+    "ema-pytorch",
     "torch>=2.4",
-    "x-mlps-pytorch>=0.0.30"
+    "torchvision",
+    "x-mlps-pytorch>=0.1.0"
 ]
 
 [project.urls]
