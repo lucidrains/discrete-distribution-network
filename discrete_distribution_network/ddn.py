@@ -389,7 +389,7 @@ class DDN(Module):
 
         # dimensions
 
-        dim_mults = [2 ** stage for stage in range(stages)]
+        dim_mults = reversed([2 ** stage for stage in range(stages)])
 
         dims = [min(dim_max, dim * dim_mult) for dim_mult in dim_mults]
 
