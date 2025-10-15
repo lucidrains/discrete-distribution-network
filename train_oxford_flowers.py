@@ -46,11 +46,11 @@ flowers_dataset = OxfordFlowersDataset(
 from discrete_distribution_network import DDN, Trainer
 
 ddn = DDN(
-    dim = 32,
+    dim = 64,
     image_size = IMAGE_SIZE,
-    dropout = 0.1,
+    dropout = 0.05,
     guided_sampler_kwargs = dict(
-        crossover_top2_prob = 0.25,
+        crossover_top2_prob = 0.1,
         straight_through_distance_logits = True
     )
 )
@@ -59,7 +59,6 @@ trainer = Trainer(
     ddn,
     dataset = flowers_dataset,
     num_train_steps = 70_000,
-    sample_temperature = 1.5,
     use_ema = True,
     ema_kwargs = dict(
         param_or_buffer_names_no_ema = ddn.guided_sampler_codes_param_names()

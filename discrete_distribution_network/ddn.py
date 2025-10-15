@@ -597,7 +597,6 @@ class Trainer(Module):
         results_folder: str = './results',
         save_results_every: int = 100,
         checkpoint_every: int = 1000,
-        sample_temperature: float = 1.,
         num_samples: int = 16,
         adam_kwargs: dict = dict(),
         accelerate_kwargs: dict = dict(),
@@ -647,7 +646,6 @@ class Trainer(Module):
 
         self.checkpoint_every = checkpoint_every
         self.save_results_every = save_results_every
-        self.sample_temperature = sample_temperature
 
         self.num_sample_rows = int(math.sqrt(num_samples))
         assert (self.num_sample_rows ** 2) == num_samples, f'{num_samples} must be a square'
