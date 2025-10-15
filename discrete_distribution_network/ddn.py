@@ -421,7 +421,10 @@ class DDN(Module):
                 nn.Conv2d(dim_in_with_maybe_prev, dim_out, 3, padding = 1)
             )
 
-            resnet_block = ResnetBlock(dim_out, dropout = dropout)
+            resnet_block = nn.Sequential(
+                ResnetBlock(dim_out, dropout = dropout),
+                ResnetBlock(dim_out, dropout = dropout)
+            )
 
             guided_sampler = GuidedSampler(
                 dim = dim_out,
@@ -571,7 +574,7 @@ class DDN(Module):
 
 # trainer
 
-from torch.optim import Adam
+from torch.optim import AdamW
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 
@@ -594,7 +597,8 @@ class Trainer(Module):
         dataset: dict | Dataset,
         num_train_steps = 70_000,
         learning_rate = 3e-4,
-        batch_size = 16,
+        weight_decay = 1e-3,
+        batch_size = 32,
         checkpoints_folder: str = './checkpoints',
         results_folder: str = './results',
         save_results_every: int = 100,
@@ -631,7 +635,7 @@ class Trainer(Module):
 
         # optimizer, dataloader, and all that
 
-        self.optimizer = Adam(self.model.parameters(), lr = learning_rate, **adam_kwargs)
+        self.optimizer = AdamW(self.model.parameters(), lr = learning_rate, weight_decay = weight_decay, **adam_kwargs)
         self.dl = DataLoader(dataset, batch_size = batch_size, shuffle = True, drop_last = True)
 
         self.model, self.optimizer, self.dl = self.accelerator.prepare(self.model, self.optimizer, self.dl)
