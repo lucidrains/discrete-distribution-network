@@ -10,7 +10,7 @@ from collections import namedtuple
 import torch
 from torch import nn, arange, tensor, cat
 import torch.nn.functional as F
-from torch.nn import Module, ModuleList
+from torch.nn import Module, ModuleList, Sequential
 
 from einops import rearrange, repeat, einsum, pack, unpack
 from einops.layers.torch import Rearrange
@@ -73,6 +73,8 @@ class GuidedSampler(Module):
         distance_fn: Callable | None = None,
         split_thres = 2.,
         prune_thres = 0.5,
+        network_activation: Module | None = None,
+        prenorm = True,
         min_total_count_before_split_prune = 100,
         crossover_top2_prob = 0.,
         straight_through_distance_logits = False,
@@ -82,8 +84,13 @@ class GuidedSampler(Module):
     ):
         super().__init__()
 
+        self.norm = ChanRMSNorm(dim) if prenorm else nn.Identity()
+
         if not exists(network):
             network = nn.Conv2d(dim, dim_query, 1, bias = False)
+
+            if exists(network_activation):
+                network = Sequential(network, nn.Sigmoid())
 
         self.codebook_size = codebook_size
         self.to_key_values = Ensemble(network, ensemble_size = codebook_size)
@@ -174,6 +181,8 @@ class GuidedSampler(Module):
         codes          # (b) | ()
     ):
         batch = features.shape[0]
+
+        features = self.norm(features)
 
         # handle patches
 
@@ -452,7 +461,7 @@ class DDN(Module):
 
             features = upsampler(features)
 
-            features = resnet_block(features)
+            features = resnet_block(features) + features
 
             sampled_output = guided_sampler.forward_for_codes(features, layer_codes)
 
@@ -486,7 +495,7 @@ class DDN(Module):
 
             features = upsampler(features)
 
-            features = resnet_block(features)
+            features = resnet_block(features) + features
 
             # query image for guiding is just input images resized
 

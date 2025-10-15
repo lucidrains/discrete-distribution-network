@@ -45,7 +45,7 @@ flowers_dataset = OxfordFlowersDataset(
 from discrete_distribution_network import DDN, Trainer
 
 ddn = DDN(
-    dim = 64,
+    dim = 32,
     image_size = IMAGE_SIZE,
     guided_sampler_kwargs = dict(
         crossover_top2_prob = 0.25

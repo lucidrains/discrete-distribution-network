@@ -1,6 +1,6 @@
 [project]
 name = "discrete-distribution-network"
-version = "0.1.0"
+version = "0.1.1"
 description = "Discrete Distribution Network"
 authors = [
     { name = "Phil Wang", email = "lucidrains@gmail.com" }
