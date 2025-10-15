@@ -348,9 +348,10 @@ class ResnetBlock(Module):
         self.block2 = Block(dim_out, dim_out)
 
     def forward(self, x):
+        res = x
         h = self.block1(x)
         h = self.block2(h)
-        return h
+        return h + res
 
 class DDN(Module):
     def __init__(
@@ -404,7 +405,10 @@ class DDN(Module):
                 nn.Conv2d(dim_in + prev_sampled_dim, dim_out, 3, padding = 1)
             )
 
-            resnet_block = ResnetBlock(dim_out, dim_out, dropout = dropout)
+            resnet_block = nn.Sequential(
+                ResnetBlock(dim_out, dim_out, dropout = dropout),
+                ResnetBlock(dim_out, dim_out, dropout = dropout)
+            )
 
             guided_sampler = GuidedSampler(
                 dim = dim_out,
@@ -447,6 +451,9 @@ class DDN(Module):
         codes = None,  # (b stages)
         return_codes = False
     ):
+        was_training = self.training
+        self.eval()
+
         assert exists(batch_size) ^ exists(codes)
 
         # if only batch size sent in, random codes
@@ -469,9 +476,11 @@ class DDN(Module):
 
             features = upsampler(features)
 
-            features = resnet_block(features) + features
+            features = resnet_block(features)
 
             sampled_output = guided_sampler.forward_for_codes(features, layer_codes)
+
+        self.train(was_training)
 
         # last sampled output 
 
@@ -503,7 +512,7 @@ class DDN(Module):
 
             features = upsampler(features)
 
-            features = resnet_block(features) + features
+            features = resnet_block(features)
 
             # query image for guiding is just input images resized
 

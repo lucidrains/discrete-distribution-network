@@ -48,7 +48,8 @@ ddn = DDN(
     dim = 32,
     image_size = IMAGE_SIZE,
     guided_sampler_kwargs = dict(
-        crossover_top2_prob = 0.25
+        crossover_top2_prob = 0.25,
+        straight_through_distance_logits = True
     )
 )
 
