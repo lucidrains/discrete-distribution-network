@@ -54,6 +54,17 @@ def pack_one(t, pattern):
 
     return packed, inverse
 
+# norms
+
+class ChanRMSNorm(Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.scale = dim ** 0.5
+        self.gamma = nn.Parameter(torch.zeros(1, dim, 1, 1))
+
+    def forward(self, x):
+        return F.normalize(x, dim = 1) * (self.gamma + 1.) * self.scale
+
 # classes
 
 def split_and_prune_(network: Module):
@@ -74,7 +85,8 @@ class GuidedSampler(Module):
         split_thres = 2.,
         prune_thres = 0.5,
         network_activation: Module | None = None,
-        prenorm = True,
+        prenorm = False,
+        norm_module: Module | None = None,
         min_total_count_before_split_prune = 100,
         crossover_top2_prob = 0.,
         straight_through_distance_logits = False,
@@ -84,7 +96,10 @@ class GuidedSampler(Module):
     ):
         super().__init__()
 
-        self.norm = ChanRMSNorm(dim) if prenorm else nn.Identity()
+        if prenorm and not exists(norm_module):
+            norm_module = ChanRMSNorm(dim)
+
+        self.norm = default(norm_module, nn.Identity())
 
         if not exists(network):
             network = nn.Conv2d(dim, dim_query, 1, bias = False)
@@ -300,15 +315,6 @@ class GuidedSampler(Module):
         return output, distance
 
 # ddn
-
-class ChanRMSNorm(Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.scale = dim ** 0.5
-        self.gamma = nn.Parameter(torch.zeros(1, dim, 1, 1))
-
-    def forward(self, x):
-        return F.normalize(x, dim = 1) * (self.gamma + 1.) * self.scale
 
 class Block(Module):
     def __init__(
