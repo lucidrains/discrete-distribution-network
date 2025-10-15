@@ -350,10 +350,12 @@ class ResnetBlock(Module):
     def __init__(
         self,
         dim,
-        dim_out,
+        dim_out = None,
         dropout = 0.
     ):
         super().__init__()
+        dim_out = default(dim_out, dim)
+
         self.block1 = Block(dim, dim_out, dropout = dropout)
         self.block2 = Block(dim_out, dim_out)
         self.layerscale = nn.Parameter(torch.randn(dim_out, 1, 1) * 1e-6)
@@ -411,15 +413,15 @@ class DDN(Module):
 
             prev_sampled_dim = channels if has_prev_sampler_output else 0
 
+            dim_in_with_maybe_prev = dim_in + prev_sampled_dim
+
             upsampler = nn.Sequential(
+                ResnetBlock(dim_in_with_maybe_prev, dropout = dropout),
                 nn.Upsample(scale_factor = 2, mode = 'bilinear'),
-                nn.Conv2d(dim_in + prev_sampled_dim, dim_out, 3, padding = 1)
+                nn.Conv2d(dim_in_with_maybe_prev, dim_out, 3, padding = 1)
             )
 
-            resnet_block = nn.Sequential(
-                ResnetBlock(dim_out, dim_out, dropout = dropout),
-                ResnetBlock(dim_out, dim_out, dropout = dropout)
-            )
+            resnet_block = ResnetBlock(dim_out, dropout = dropout)
 
             guided_sampler = GuidedSampler(
                 dim = dim_out,
