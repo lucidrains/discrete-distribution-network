@@ -1,6 +1,6 @@
 <img src="./ddn.png" width="400px"></img>
 
-## Discrete Distribution Network (wip)
+## Discrete Distribution Network
 
 Exploration into [Discrete Distribution Network](https://discrete-distribution-networks.github.io/), by Lei Yang out of Beijing
 
