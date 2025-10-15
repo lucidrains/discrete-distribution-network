@@ -219,6 +219,8 @@ class GuidedSampler(Module):
         return_distances = False
     ):
 
+        features = self.norm(features)
+
         # take care of maybe patching
 
         if self.acts_on_patches:
