@@ -82,6 +82,7 @@ class GuidedSampler(Module):
         codebook_size = 10,             # K in paper
         network: Module | None = None,
         distance_fn: Callable | None = None,
+        chain_dropout_prob = 0.05,
         split_thres = 2.,
         prune_thres = 0.5,
         network_activation: Module | None = None,
@@ -110,6 +111,10 @@ class GuidedSampler(Module):
         self.codebook_size = codebook_size
         self.to_key_values = Ensemble(network, ensemble_size = codebook_size)
         self.distance_fn = default(distance_fn, torch.cdist)
+
+        # chain dropout
+
+        self.chain_dropout_prob = chain_dropout_prob
 
         # split and prune related
 
@@ -279,10 +284,16 @@ class GuidedSampler(Module):
 
         # select the code parameters that produced the image that is closest to the query
 
-        codes = logits.argmax(dim = -1)
+        if self.training and sample_prob(self.chain_dropout_prob):
+            # handle the chain dropout
 
-        if self.training:
-            self.counts.scatter_add_(0, codes, torch.ones_like(codes))
+            codes = torch.randint(0, self.codebook_size, (batch,), device = device)
+
+        else:
+            codes = logits.argmax(dim = -1)
+
+            if self.training:
+                self.counts.scatter_add_(0, codes, torch.ones_like(codes))
 
         # some tensor gymnastics to select out the image across batch
 

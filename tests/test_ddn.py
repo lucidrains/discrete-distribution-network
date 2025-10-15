@@ -7,10 +7,12 @@ from torch import tensor, nn
 @param('use_mlp', (False, True))
 @param('straight_through', (False, True))
 @param('prenorm', (False, True))
+@param('chain_dropout_prob', (0., 1.))
 def test_ddn(
     use_mlp,
     straight_through,
-    prenorm
+    prenorm,
+    chain_dropout_prob
 ):
     from discrete_distribution_network.ddn import GuidedSampler
 
@@ -30,6 +32,7 @@ def test_ddn(
         prenorm = prenorm,
         min_total_count_before_split_prune = 1,
         crossover_top2_prob = 1.,
+        chain_dropout_prob = chain_dropout_prob,
         straight_through_distance_logits = straight_through
     )
 
