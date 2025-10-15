@@ -24,6 +24,7 @@ class OxfordFlowersDataset(Dataset):
         self.ds = load_dataset('nelorth/oxford-flowers')['train']
 
         self.transform = T.Compose([
+            T.RandomHorizontalFlip(),
             T.Resize((image_size, image_size)),
             T.PILToTensor()
         ])

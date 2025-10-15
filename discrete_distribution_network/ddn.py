@@ -193,7 +193,8 @@ class GuidedSampler(Module):
     def forward_for_codes(
         self,
         features,      # (b d h w)
-        codes          # (b) | ()
+        codes,         # (b) | ()
+        residual = None
     ):
         batch = features.shape[0]
 
@@ -225,13 +226,17 @@ class GuidedSampler(Module):
             sel_key_values = inverse_pack(sel_key_values)
             sel_key_values = self.patches_to_image(sel_key_values)
 
+        if exists(residual):
+            sel_key_values = sel_key_values + residual
+
         return sel_key_values
 
     def forward(
         self,
         features,       # (b d h w)
         query,          # (b c h w)
-        return_distances = False
+        return_distances = False,
+        residual = None
     ):
 
         features = self.norm(features)
@@ -250,6 +255,11 @@ class GuidedSampler(Module):
         batch, device = query.shape[0], query.device
 
         key_values = self.to_key_values(features)
+
+        # handle residual
+
+        if exists(residual):
+            key_values = key_values + residual
 
         # get the l2 distance
 
@@ -346,12 +356,13 @@ class ResnetBlock(Module):
         super().__init__()
         self.block1 = Block(dim, dim_out, dropout = dropout)
         self.block2 = Block(dim_out, dim_out)
+        self.layerscale = nn.Parameter(torch.randn(dim_out, 1, 1) * 1e-6)
 
     def forward(self, x):
         res = x
         h = self.block1(x)
         h = self.block2(h)
-        return h + res
+        return h * self.layerscale + res
 
 class DDN(Module):
     def __init__(
@@ -468,6 +479,7 @@ class DDN(Module):
         # sampled output of a stage
 
         sampled_output = None
+        rgb_residual = None
 
         for (upsampler, resnet_block, guided_sampler), layer_codes in zip(self.layers, codes.unbind(dim = 1)):
 
@@ -478,7 +490,13 @@ class DDN(Module):
 
             features = resnet_block(features)
 
-            sampled_output = guided_sampler.forward_for_codes(features, layer_codes)
+            if exists(rgb_residual):
+                height, width = features.shape[-2:]
+                rgb_residual = F.interpolate(rgb_residual, (height, width), mode = 'bilinear')
+
+            sampled_output = guided_sampler.forward_for_codes(features, layer_codes, residual = rgb_residual)
+
+            rgb_residual = sampled_output
 
         self.train(was_training)
 
@@ -505,6 +523,8 @@ class DDN(Module):
         codes = []
         sampled_outputs = []
 
+        rgb_residual = None
+
         for upsampler, resnet_block, guided_sampler in self.layers:
 
             if len(sampled_outputs) > 0:
@@ -519,9 +539,16 @@ class DDN(Module):
             height, width = features.shape[-2:]
             query_images = F.interpolate(images, (height, width), mode = 'bilinear')
 
+            # handle rgb residual
+
+            if exists(rgb_residual):
+                rgb_residual = F.interpolate(rgb_residual, (height, width), mode = 'bilinear')
+
             # guided sampler
 
-            sampled_output, layer_code, layer_loss = guided_sampler(features, query_images)
+            sampled_output, layer_code, layer_loss = guided_sampler(features, query_images, residual = rgb_residual)
+
+            rgb_residual = sampled_output
 
             # losses, codes, outputs
 
