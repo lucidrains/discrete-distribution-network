@@ -25,7 +25,7 @@ class OxfordFlowersDataset(Dataset):
 
         self.transform = T.Compose([
             T.RandomHorizontalFlip(),
-            T.Resize((image_size, image_size)),
+            T.RandomResizedCrop((image_size, image_size), (0.8, 1.)),
             T.PILToTensor()
         ])
 
