@@ -386,6 +386,7 @@ class DDN(Module):
         channels = 3,
         codebook_size = 10,
         dropout = 0.,
+        num_resnet_blocks = 2,
         guided_sampler_kwargs: dict = dict(),
     ):
         super().__init__()
@@ -432,10 +433,9 @@ class DDN(Module):
                 nn.Conv2d(dim_in_with_maybe_prev, dim_out, 3, padding = 1)
             )
 
-            resnet_block = nn.Sequential(
-                ResnetBlock(dim_out, dropout = dropout),
-                ResnetBlock(dim_out, dropout = dropout)
-            )
+            resnet_block = nn.Sequential(*[
+                ResnetBlock(dim_out, dropout = dropout) for _ in range(num_resnet_blocks)
+            ])
 
             guided_sampler = GuidedSampler(
                 dim = dim_out,
