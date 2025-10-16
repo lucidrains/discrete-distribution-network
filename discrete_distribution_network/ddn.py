@@ -93,17 +93,34 @@ class GuidedSampler(Module):
         straight_through_distance_logits = False,
         stochastic = False,
         gumbel_noise_scale = 1.,
-        patch_size = None               # facilitate the future work where the guided sampler is done on patches
+        patch_size = None,              # facilitate the future work where the guided sampler is done on patches
+        separate_values = False,        # taking attention perspective, this will have the network also produce the values separately from the keys, using the dim_value below - (from this perspective, what the author has is actually a shared key/value hard attention)
+        dim_values = None,              # default to dim_query (which is actually the key dimension)
     ):
         super().__init__()
+
+        # normalization
 
         if prenorm and not exists(norm_module):
             norm_module = ChanRMSNorm(dim)
 
         self.norm = default(norm_module, nn.Identity())
 
+        network_dim_out = dim_query
+
+        # whether to have separate values passed on - can also pass both keys and values on
+
+        self.dim_query = dim_query
+        self.separate_values = separate_values
+
+        if separate_values:
+            dim_values = default(dim_values, dim_query)
+            network_dim_out = network_dim_out + dim_values
+
+        # the network / codebook
+
         if not exists(network):
-            network = nn.Conv2d(dim, dim_query, 1, bias = False)
+            network = nn.Conv2d(dim, network_dim_out, 1, bias = False)
 
             if exists(network_activation):
                 network = Sequential(network, nn.Sigmoid())
@@ -274,11 +291,18 @@ class GuidedSampler(Module):
         if exists(residual):
             key_values = key_values + residual
 
+        # get the keys
+
+        if self.separate_values:
+            keys, values = key_values[:, :, :self.dim_query], key_values[:, :, self.dim_query:]
+        else:
+            keys, values = key_values, key_values
+
         # get the l2 distance
 
         distance = self.distance_fn(
             rearrange(query, 'b ... -> b 1 (...)'),
-            rearrange(key_values, 'k b ... -> b k (...)')
+            rearrange(keys, 'k b ... -> b k (...)')
         )
 
         distance = rearrange(distance, 'b 1 k -> b k')
@@ -322,21 +346,28 @@ class GuidedSampler(Module):
             st_one_hot = one_hot + attn - attn.detach()
             sel_key_values = einsum(key_values, st_one_hot, 'k b ..., b k -> b ...')
 
+        # separate values logic
+
+        if self.separate_values:
+            sel_keys, sel_values = sel_key_values[:, :self.dim_query], sel_key_values[:, self.dim_query:]
+        else:
+            sel_keys, sel_values = sel_key_values, sel_key_values
+
         # commit loss
 
-        commit_loss = F.mse_loss(sel_key_values, query)
+        commit_loss = F.mse_loss(sel_keys, query)
 
         # maybe reconstitute patch dimensions
 
         if self.acts_on_patches:
-            sel_key_values = inverse_pack(sel_key_values, '* c p1 p2')
-            sel_key_values = self.patches_to_image(sel_key_values)
+            sel_values = inverse_pack(sel_values, '* c p1 p2')
+            sel_values = self.patches_to_image(sel_values)
 
             codes = inverse_pack(codes, '*')
 
         # return the chosen feature, the code indices, and commit loss
 
-        output = GuidedSamplerOutput(sel_key_values, codes, commit_loss)
+        output = GuidedSamplerOutput(sel_values, codes, commit_loss)
 
         if not return_distances:
             return output
