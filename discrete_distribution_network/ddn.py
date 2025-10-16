@@ -345,6 +345,25 @@ class GuidedSampler(Module):
 
 # ddn
 
+class Conv2dCroppedResidual(Module):
+    # used in alphagenome
+
+    def __init__(
+        self,
+        dim,
+        dim_out,
+        kernel_size,
+        **kwargs
+    ):
+        super().__init__()
+        assert dim >= dim_out
+        self.pad = dim - dim_out
+        self.conv = nn.Conv2d(dim, dim_out, kernel_size, **kwargs)
+
+    def forward(self, x):
+        residual, length = x, x.shape[1]
+        return self.conv(x) + residual[:, :(length - self.pad)]
+
 class Block(Module):
     def __init__(
         self,
@@ -436,9 +455,8 @@ class DDN(Module):
             dim_in_with_maybe_prev = dim_in + prev_sampled_dim
 
             upsampler = nn.Sequential(
-                ResnetBlock(dim_in_with_maybe_prev, dropout = dropout),
                 nn.Upsample(scale_factor = 2, mode = 'bilinear'),
-                nn.Conv2d(dim_in_with_maybe_prev, dim_out, 3, padding = 1)
+                Conv2dCroppedResidual(dim_in_with_maybe_prev, dim_out, 1)
             )
 
             resnet_block = nn.Sequential(*[
