@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch.nn import Module, ModuleList, Sequential
 
 from einops import rearrange, repeat, einsum, pack, unpack
-from einops.layers.torch import Rearrange
+from einops.layers.torch import Rearrange, Reduce
 
 from x_mlps_pytorch.ensemble import Ensemble
 
@@ -364,6 +364,26 @@ class Conv2dCroppedResidual(Module):
         residual, length = x, x.shape[1]
         return self.conv(x) + residual[:, :(length - self.pad)]
 
+class SqueezeExcite(Module):
+    def __init__(
+        self,
+        dim,
+        squeeze_factor = 4.
+    ):
+        super().__init__()
+        dim_squeezed = int(max(32, dim // squeeze_factor))
+
+        self.squeeze = Sequential(
+            Reduce('b c h w -> b c 1 1', 'mean'),
+            nn.Conv2d(dim, dim_squeezed, 1),
+            nn.ReLU(),
+            nn.Conv2d(dim_squeezed, dim, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return x * self.squeeze(x)
+
 class Block(Module):
     def __init__(
         self,
@@ -396,12 +416,15 @@ class ResnetBlock(Module):
 
         self.block1 = Block(dim, dim_out, dropout = dropout)
         self.block2 = Block(dim_out, dim_out)
+        self.squeeze_excite = SqueezeExcite(dim_out)
+
         self.layerscale = nn.Parameter(torch.randn(dim_out, 1, 1) * 1e-6)
 
     def forward(self, x):
         res = x
         h = self.block1(x)
         h = self.block2(h)
+        h = self.squeeze_excite(h)
         return h * self.layerscale + res
 
 class DDN(Module):
