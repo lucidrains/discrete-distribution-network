@@ -60,9 +60,7 @@ trainer = Trainer(
     dataset = flowers_dataset,
     num_train_steps = 70_000,
     use_ema = True,
-    ema_kwargs = dict(
-        param_or_buffer_names_no_ema = ddn.guided_sampler_codes_param_names()
-    ),
+    batch_size = 32,
     results_folder = './results'   # samples will be saved periodically to this folder
 )
 

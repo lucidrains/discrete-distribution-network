@@ -665,6 +665,7 @@ class Trainer(Module):
             self.ema_model = EMA(
                 self.model,
                 forward_method_names = ('sample',),
+                param_or_buffer_names_no_ema = ddn.guided_sampler_codes_param_names(),
                 **ema_kwargs
             )
 
