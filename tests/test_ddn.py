@@ -52,7 +52,10 @@ def test_ddn(
     assert sampler.forward_for_codes(features[:3], tensor([3, 5, 2])).shape == (3, 3, 32, 32)
     assert sampler.forward_for_codes(features[:3], tensor(7)).shape == (3, 3, 32, 32)
 
-def test_patches():
+@param('add_feature_residual', (False, True))
+def test_patches(
+    add_feature_residual
+):
     from discrete_distribution_network.ddn import GuidedSampler
 
     sampler = GuidedSampler(
@@ -67,7 +70,11 @@ def test_patches():
     features = torch.randn(10, 16, 32, 32)
     query_image = torch.randn(10, 3, 32, 32)
 
-    out, codes, commit_loss = sampler(features, query_image)
+    residual = None
+    if add_feature_residual:
+        residual = torch.randn(10, 3, 32, 32)
+
+    out, codes, commit_loss = sampler(features, query_image, residual = residual)
 
     assert out.shape == query_image.shape
     assert codes.shape == (10, 2, 2) # (2, 2) since each batch has 4 patches

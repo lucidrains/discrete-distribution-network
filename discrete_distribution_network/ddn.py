@@ -215,6 +215,10 @@ class GuidedSampler(Module):
             features = self.image_to_patches(features)
             features, inverse_pack = pack_one(features, '* c h w')
 
+            if exists(residual):
+                residual = self.image_to_patches(residual)
+                residual, _ = pack_one(residual, '* c h w')
+
             codes = repeat(codes, 'b h w -> (b h w)')
 
         # if one code, just forward the selected network for all features
@@ -254,6 +258,10 @@ class GuidedSampler(Module):
 
             features, _ = pack_one(features, '* c h w')
             query, inverse_pack = pack_one(query, '* c h w')
+
+            if exists(residual):
+                residual = self.image_to_patches(residual)
+                residual, _ = pack_one(residual, '* c h w')
 
         # variables
 
