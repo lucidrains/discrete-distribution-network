@@ -389,7 +389,7 @@ class Conv2dCroppedResidual(Module):
         super().__init__()
         assert dim >= dim_out
         self.pad = dim - dim_out
-        self.conv = nn.Conv2d(dim, dim_out, kernel_size, **kwargs)
+        self.conv = Block(dim, dim_out, 1)
 
     def forward(self, x):
         residual, length = x, x.shape[1]
@@ -420,19 +420,20 @@ class Block(Module):
         self,
         dim,
         dim_out,
+        kernel_size = 3,
         dropout = 0.
     ):
         super().__init__()
-        self.proj = nn.Conv2d(dim, dim_out, 3, padding = 1)
-        self.norm = ChanRMSNorm(dim_out)
+        self.norm = ChanRMSNorm(dim)
         self.act = nn.SiLU()
+        self.proj = nn.Conv2d(dim, dim_out, kernel_size, padding = kernel_size // 2)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         x = x.contiguous()
-        x = self.proj(x)
         x = self.norm(x)
         x = self.act(x)
+        x = self.proj(x)
         return self.dropout(x)
 
 class ResnetBlock(Module):
