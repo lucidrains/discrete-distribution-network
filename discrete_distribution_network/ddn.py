@@ -10,7 +10,7 @@ from collections import namedtuple
 import torch
 from torch import nn, arange, tensor, cat
 import torch.nn.functional as F
-from torch.nn import Module, ModuleList, Sequential
+from torch.nn import Module, ModuleList
 
 from einops import rearrange, repeat, einsum, pack, unpack
 from einops.layers.torch import Rearrange, Reduce
@@ -54,6 +54,9 @@ def pack_one(t, pattern):
 
     return packed, inverse
 
+def Sequential(*mods):
+    return nn.Sequential(*[*filter(exists, mods)])
+
 # norms
 
 class ChanRMSNorm(Module):
@@ -85,7 +88,8 @@ class GuidedSampler(Module):
         chain_dropout_prob = 0.05,
         split_thres = 2.,
         prune_thres = 0.5,
-        network_activation: Module | None = None,
+        pre_network_activation: Module | None = None,
+        post_network_activation: Module | None = None,
         prenorm = False,
         norm_module: Module | None = None,
         min_total_count_before_split_prune = 100,
@@ -122,8 +126,8 @@ class GuidedSampler(Module):
         if not exists(network):
             network = nn.Conv2d(dim, network_dim_out, 1, bias = False)
 
-            if exists(network_activation):
-                network = Sequential(network, nn.Sigmoid())
+            if exists(post_network_activation) or exists(pre_network_activation):
+                network = Sequential(pre_network_activation, network, post_network_activation)
 
         self.codebook_size = codebook_size
         self.to_key_values = Ensemble(network, ensemble_size = codebook_size)

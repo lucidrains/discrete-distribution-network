@@ -43,6 +43,7 @@ flowers_dataset = OxfordFlowersDataset(
 
 # models and trainer
 
+from torch import nn
 from discrete_distribution_network import DDN, Trainer
 
 ddn = DDN(
@@ -51,7 +52,8 @@ ddn = DDN(
     dropout = 0.05,
     guided_sampler_kwargs = dict(
         crossover_top2_prob = 0.1,
-        straight_through_distance_logits = True
+        straight_through_distance_logits = True,
+        pre_network_activation = nn.SiLU()
     )
 )
 
