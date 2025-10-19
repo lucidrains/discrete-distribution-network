@@ -9,7 +9,7 @@ Besides the split-and-prune, may also throw in an option for crossover (mixing o
 ## Install
 
 ```bash
-$ discrete-distribution-network
+$ pip install discrete-distribution-network
 ```
 
 ## Usage
