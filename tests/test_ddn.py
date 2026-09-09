@@ -8,7 +8,7 @@ from torch import tensor, nn
 @param('straight_through', (False, True))
 @param('prenorm', (False, True))
 @param('chain_dropout_prob', (0., 1.))
-def test_ddn(
+def test_guided_sampler(
     use_mlp,
     straight_through,
     prenorm,
